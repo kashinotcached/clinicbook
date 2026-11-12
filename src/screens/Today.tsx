@@ -4,6 +4,7 @@ import { db, type Visit } from '../db'
 import { backupAgeDays } from '../backup'
 import { addDays, courseState, fmtDate, forecast, relDay, today, type CourseState } from '../logic'
 import { Empty, Header, go } from '../ui'
+import { SyncBar } from './SyncBar'
 
 export function Today() {
   const data = useLiveQuery(async () => {
@@ -66,6 +67,7 @@ export function Today() {
     <>
       <Header title="Today" action={<span className="date-chip">{fmtDate(t)}</span>} />
       <main>
+        <SyncBar />
         {backupAge !== undefined && data.patientCount > 0 && (backupAge === null || backupAge >= 7) && (
           <a className="alert warn" href="#/settings">
             <strong>{backupAge === null ? 'No backup yet' : `Last backup ${backupAge} days ago`}</strong>

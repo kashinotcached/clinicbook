@@ -339,3 +339,8 @@ button.small { min-height: 38px; font-size: .88rem; width: auto; padding: 0 12px
   .report-grid > section:first-child { grid-column: 1 / -1; }
   .thumb { width: 104px; height: 104px; }
 }
+
+/* ---------- sync ---------- */
+.sync-bar { display: block; width: 100%; text-align: left; background: var(--brand-soft); color: var(--brand); border: 0; border-radius: 10px; padding: 9px 12px; font-size: .85rem; margin: 4px 0 8px; cursor: pointer; }
+.sync-bar.warn { background: var(--warn-soft); color: var(--warn); }
+.sync-progress { color: var(--brand); font-weight: 600; margin: 0; }

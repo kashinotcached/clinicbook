@@ -35,6 +35,29 @@ A phone app for a hair clinic (PRP / GFC): patients, six-session courses, visits
 - **Settings**: encrypted backup and restore, app PIN, treatments with their usual fee and dose, stock items and low-stock levels,
   photo areas, calendar naming.
 
+## Sync between phone and PC (Google Drive)
+
+Settings → **Sync with Google Drive** keeps the phone and a PC on the same records.
+
+- Records and photos are kept in the app's own hidden folder in the doctor's Google Drive (scope `drive.appdata`): the app cannot
+  see his other Drive files, and these files do not show among them.
+- Everything is encrypted on the device with the **sync password** before upload (AES-256-GCM, key from PBKDF2). Google stores
+  only unreadable files. The first device chooses the password; every other device must enter the same one. It cannot be recovered.
+- Each record carries the time it last changed and removals are remembered, so changes made on both devices merge: for each
+  record the latest change wins, and a removal wins over older changes. Stock counts add up correctly because stock is a list of
+  entries, not a single number.
+- Sync runs on opening, about 15 seconds after a change, every 5 minutes while open, and when the internet returns. A Google
+  sign-in lasts about an hour; after that the Today screen shows "tap to sign in" (a static app cannot keep a longer sign-in
+  without a server).
+- Photos are separate encrypted files; "Download photos to this device" can be switched off on a device with little space.
+
+Google setup (once, by the developer): a Google Cloud project with the Drive API enabled, an OAuth consent screen with the
+`drive.appdata` scope, and an OAuth client of type *Web application* whose authorized JavaScript origin and redirect URI are the
+app's address. Its client ID goes in `src/config.ts`.
+
+Testing sync locally without Google: `node scripts/fake-drive.mjs`, `npm run dev -- --host`, then in two origins
+(`http://localhost:5173` and `http://127.0.0.1:5173`) run `localStorage.fakeDrive = 'http://127.0.0.1:4599'` and reload.
+
 ## Backups (important)
 
 The data lives only on the phone. If the phone is lost or reset, only a backup brings it back.

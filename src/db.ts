@@ -1,4 +1,4 @@
-import Dexie, { type Table } from 'dexie'
+import Dexie, { type Table, type Transaction } from 'dexie'
 
 /** item id -> quantity used in one session */
 export type Usage = Record<string, number>
@@ -122,6 +122,33 @@ export interface Setting {
   value: unknown
 }
 
+/** Tables that make up "the records" (everything except photo files). */
+export const recordTables = [
+  'patients',
+  'courses',
+  'visits',
+  'photos',
+  'stockItems',
+  'stockMoves',
+  'treatments',
+  'settings',
+  'suppliers',
+] as const
+
+/** A record removed on this device, kept so the removal reaches other devices when syncing. */
+export interface Deletion {
+  id: string
+  table: string
+  key: string
+  at: number
+}
+
+/** Values that belong to this device only and never sync (sync key, sign-in token…). */
+export interface LocalValue {
+  key: string
+  value: unknown
+}
+
 class ClinicDb extends Dexie {
   patients!: Table<Patient, string>
   courses!: Table<Course, string>
@@ -133,6 +160,8 @@ class ClinicDb extends Dexie {
   treatments!: Table<Treatment, string>
   settings!: Table<Setting, string>
   suppliers!: Table<Supplier, string>
+  deletions!: Table<Deletion, string>
+  local!: Table<LocalValue, string>
 
   constructor() {
     super('clinicbook')
@@ -151,25 +180,77 @@ class ClinicDb extends Dexie {
       stockMoves: 'id, itemId, visitId, date, supplierId',
       suppliers: 'id, name',
     })
+    // v3: every record carries _mt (last changed, ms) and removals are remembered, for syncing between devices
+    this.version(3)
+      .stores({ deletions: 'id, at', local: 'key' })
+      .upgrade(async (tx) => {
+        const now = Date.now()
+        for (const t of recordTables)
+          await tx
+            .table(t)
+            .toCollection()
+            .modify((r: Record<string, unknown>) => {
+              r._mt = now
+            })
+      })
   }
 }
 
 export const db = new ClinicDb()
 
-/** Tables that make up "the records" (everything except photo files). */
-export const recordTables = [
-  'patients',
-  'courses',
-  'visits',
-  'photos',
-  'stockItems',
-  'stockMoves',
-  'treatments',
-  'settings',
-  'suppliers',
-] as const
 
 export const newId = () => crypto.randomUUID()
+
+/* ---------- change tracking for sync ---------- */
+
+const UNTRACKED = '__clinicbookUntracked'
+const isUntracked = (tx: Transaction | undefined) => !!(tx as unknown as Record<string, unknown> | undefined)?.[UNTRACKED]
+
+/** Run writes that must not count as local changes (applying another device's data, first-run defaults). */
+export function untracked<T>(tables: string[], fn: () => Promise<T>): Promise<T> {
+  return db.transaction('rw', tables, async () => {
+    ;(Dexie.currentTransaction as unknown as Record<string, unknown>)[UNTRACKED] = true
+    return fn()
+  })
+}
+
+/** Fires (debounced) after local changes, so sync can push them. */
+export const localChanges = new EventTarget()
+let pendingDeletions: Deletion[] = []
+const seenTx = new WeakSet<object>()
+function afterCommit(tx: Transaction) {
+  if (seenTx.has(tx)) return
+  seenTx.add(tx)
+  tx.on('complete', () =>
+    setTimeout(async () => {
+      if (pendingDeletions.length) {
+        const batch = pendingDeletions
+        pendingDeletions = []
+        await db.deletions.bulkPut(batch)
+      }
+      localChanges.dispatchEvent(new Event('change'))
+    }, 0),
+  )
+}
+
+for (const name of recordTables) {
+  const t = db.table(name)
+  t.hook('creating', function (_pk, obj, tx) {
+    if (isUntracked(tx)) return
+    ;(obj as Record<string, unknown>)._mt = Date.now()
+    afterCommit(tx)
+  })
+  t.hook('updating', function (_mods, _pk, _obj, tx) {
+    if (isUntracked(tx)) return
+    afterCommit(tx)
+    return { _mt: Date.now() }
+  })
+  t.hook('deleting', function (pk, _obj, tx) {
+    if (isUntracked(tx)) return
+    pendingDeletions.push({ id: `${name}:${pk}`, table: name, key: String(pk), at: Date.now() })
+    afterCommit(tx)
+  })
+}
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const row = await db.settings.get(key)
@@ -184,7 +265,8 @@ export const DEFAULT_PHOTO_AREAS = ['Front / hairline', 'Top', 'Crown', 'Left si
 
 /** First run: the clinic's usual stock items and the two treatments. Quantities are editable in Settings. */
 export async function seedIfEmpty() {
-  await db.transaction('rw', db.stockItems, db.treatments, db.settings, async () => {
+  // untracked: defaults carry no change time, so real data from another device always wins over them
+  await untracked(['stockItems', 'treatments', 'settings'], async () => {
     if ((await db.stockItems.count()) > 0) return
     const items: StockItem[] = [
       { id: 'prp-kit', name: 'PRP kit', unit: 'bottle', lowAt: 10, sort: 1, active: true },

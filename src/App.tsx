@@ -11,6 +11,8 @@ import { SupplierPage, Suppliers } from './screens/Suppliers'
 import { Remind } from './screens/Remind'
 import { Today } from './screens/Today'
 import { VisitForm } from './screens/VisitForm'
+import { startAutoSync } from './sync/auto'
+import { connectFakeDriveIfAsked } from './sync/fake'
 import { Toast, useRoute } from './ui'
 
 const RELOCK_AFTER_MS = 2 * 60 * 1000
@@ -29,6 +31,15 @@ export default function App() {
       navigator.storage?.persist?.().catch(() => {})
       setLocked(!!(await getSetting('pin', null)))
       setReady(true)
+      if (import.meta.env.DEV) await connectFakeDriveIfAsked()
+      startAutoSync()
+      const err = sessionStorage.getItem('signInError')
+      sessionStorage.removeItem('signInError')
+      if (err) setToast(err)
+      else if (sessionStorage.getItem('justSignedIn')) {
+        sessionStorage.removeItem('justSignedIn')
+        setToast('Signed in to Google')
+      }
     })()
   }, [])
 

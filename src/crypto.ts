@@ -50,3 +50,35 @@ export async function hashPin(pin: string, saltHex?: string) {
   const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
   return { salt: hex(salt), hash: hex(new Uint8Array(bits)) }
 }
+
+/* ---------- sync: one key per device, derived once from the sync password ---------- */
+
+const SYNC_MAGIC = enc.encode('CLSY1')
+
+export async function deriveSyncKey(password: string, salt: Uint8Array<ArrayBuffer>) {
+  return deriveKey(password, salt, ['encrypt', 'decrypt'])
+}
+
+/** File layout: "CLSY1" | iv(12) | AES-256-GCM ciphertext */
+export async function seal(key: CryptoKey, data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data))
+  const out = new Uint8Array(SYNC_MAGIC.length + 12 + cipher.length)
+  out.set(SYNC_MAGIC, 0)
+  out.set(iv, SYNC_MAGIC.length)
+  out.set(cipher, SYNC_MAGIC.length + 12)
+  return out
+}
+
+export async function unseal(key: CryptoKey, file: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  for (let i = 0; i < SYNC_MAGIC.length; i++) if (file[i] !== SYNC_MAGIC[i]) throw new Error('Not a ClinicBook sync file.')
+  const iv = file.slice(SYNC_MAGIC.length, SYNC_MAGIC.length + 12)
+  try {
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, file.slice(SYNC_MAGIC.length + 12)))
+  } catch {
+    throw new Error('Wrong sync password, or the file is damaged.')
+  }
+}
+
+export const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+export const fromHex = (h: string) => new Uint8Array(h.match(/../g)!.map((x) => parseInt(x, 16)))

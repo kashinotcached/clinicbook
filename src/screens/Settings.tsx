@@ -6,6 +6,7 @@ import { DEFAULT_PHOTO_AREAS, db, newId, setSetting, type StockItem, type Treatm
 import { addDays, today } from '../logic'
 import { DEFAULT_REMINDER, DEFAULT_TEMPLATE, reminderMessage, type ReminderSettings } from '../reminders'
 import { Field, Header, MoneyInput, Stepper, UsageEditor, go } from '../ui'
+import { SyncCard } from './SyncCard'
 
 const mb = (n: number) => (n / 1048576).toFixed(n > 10485760 ? 0 : 1) + ' MB'
 const when = (t: number) => (t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'never')
@@ -41,6 +42,7 @@ export function Settings({ notify }: { notify: (s: string) => void }) {
     <>
       <Header title="Settings" />
       <main>
+        <SyncCard notify={notify} />
         <BackupCard s={s} notify={notify} />
         <PinCard hasPin={s.hasPin} notify={notify} />
 
