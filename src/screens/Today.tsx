@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
-import { db } from '../db'
+import { db, type Visit } from '../db'
 import { backupAgeDays } from '../backup'
 import { addDays, courseState, fmtDate, forecast, relDay, today, type CourseState } from '../logic'
 import { Empty, Header, go } from '../ui'
@@ -34,7 +34,7 @@ export function Today() {
   const looseSoon = data.loose.filter((v) => v.date > t && v.date <= week)
 
   const row = (s: CourseState) => (
-    <li key={s.course.id}>
+    <li key={s.course.id} className="with-action">
       <a href={`#/patient/${s.course.patientId}`} className="row">
         <div>
           <strong>{data.names.get(s.course.patientId)}</strong>
@@ -47,6 +47,7 @@ export function Today() {
           {s.nextDate === t ? (s.booked ? 'booked' : 'due') : relDay(s.nextDate)}
         </span>
       </a>
+      {s.bookedVisit && <RemindButton v={s.bookedVisit} />}
     </li>
   )
 
@@ -79,7 +80,7 @@ export function Today() {
             <ul className="list">
               {due.map(row)}
               {looseToday.map((v) => (
-                <li key={v.id}>
+                <li key={v.id} className="with-action">
                   <a href={`#/visit/${v.id}`} className="row">
                     <div>
                       <strong>{data.names.get(v.patientId)}</strong>
@@ -87,6 +88,7 @@ export function Today() {
                     </div>
                     <span className="tag booked">booked</span>
                   </a>
+                  <RemindButton v={v} />
                 </li>
               ))}
             </ul>
@@ -109,7 +111,7 @@ export function Today() {
             <ul className="list">
               {soon.map(row)}
               {looseSoon.map((v) => (
-                <li key={v.id}>
+                <li key={v.id} className="with-action">
                   <a href={`#/visit/${v.id}`} className="row">
                     <div>
                       <strong>{data.names.get(v.patientId)}</strong>
@@ -117,6 +119,7 @@ export function Today() {
                     </div>
                     <span className="tag booked">{relDay(v.date)}</span>
                   </a>
+                  <RemindButton v={v} />
                 </li>
               ))}
             </ul>
@@ -128,6 +131,19 @@ export function Today() {
         </button>
       </main>
     </>
+  )
+}
+
+function RemindButton({ v }: { v: Visit }) {
+  return (
+    <a
+      className={'wa-mini' + (v.remindedAt ? ' sent' : '')}
+      href={`#/remind/${v.id}`}
+      aria-label={v.remindedAt ? 'Reminder sent; send again' : 'Send WhatsApp reminder'}
+      title={v.remindedAt ? 'Reminder sent' : 'Send WhatsApp reminder'}
+    >
+      {v.remindedAt ? '✓' : '💬'}
+    </a>
   )
 }
 

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { backupPhotos, backupRecords, readBackup, restorePhotos, restoreRecords, shareFile } from '../backup'
 import { hashPin } from '../crypto'
 import { DEFAULT_PHOTO_AREAS, db, newId, setSetting, type StockItem, type Treatment } from '../db'
+import { addDays, today } from '../logic'
+import { DEFAULT_REMINDER, DEFAULT_TEMPLATE, reminderMessage, type ReminderSettings } from '../reminders'
 import { Field, Header, Stepper, UsageEditor } from '../ui'
 
 const mb = (n: number) => (n / 1048576).toFixed(n > 10485760 ? 0 : 1) + ' MB'
@@ -14,6 +16,8 @@ export function Settings({ notify }: { notify: (s: string) => void }) {
     const m = Object.fromEntries(rows.map((r) => [r.key, r.value]))
     return {
       calendarName: (m.calendarName as string) ?? 'initials',
+      calendarLink: (m.calendarLink as boolean) ?? true,
+      reminder: { ...DEFAULT_REMINDER, ...((m.reminder as Partial<ReminderSettings>) ?? {}) },
       photoAreas: (m.photoAreas as string[]) ?? DEFAULT_PHOTO_AREAS,
       hasPin: !!m.pin,
       lastRecords: (m.lastRecordsBackup as number) ?? 0,
@@ -66,6 +70,8 @@ export function Settings({ notify }: { notify: (s: string) => void }) {
           </Field>
         </section>
 
+        <ReminderCard r={s.reminder} />
+
         <section className="card form">
           <h3>Google Calendar</h3>
           <Field label="Name in calendar entries" hint="Calendar entries are stored by Google. Initials keep patient names off Google.">
@@ -75,6 +81,14 @@ export function Settings({ notify }: { notify: (s: string) => void }) {
               <option value="none">No name</option>
             </select>
           </Field>
+          <label className="check">
+            <input type="checkbox" checked={s.calendarLink} onChange={(e) => setSetting('calendarLink', e.target.checked)} />
+            Put a WhatsApp reminder link in each entry
+          </label>
+          <p className="hint">
+            When the calendar reminds you, tap the link in the entry: ClinicBook opens with the message ready for that patient.
+            The link is only a random code. Entries made before this was switched on have no link.
+          </p>
         </section>
 
         {storage && (
@@ -113,6 +127,41 @@ export function Settings({ notify }: { notify: (s: string) => void }) {
         </section>
       </main>
     </>
+  )
+}
+
+function ReminderCard({ r }: { r: ReminderSettings }) {
+  const save = (patch: Partial<ReminderSettings>) => setSetting('reminder', { ...r, ...patch })
+  const sample = reminderMessage(
+    r,
+    { id: '', name: 'Rahul Kamat', phone: '', gender: '', notes: '', createdAt: 0, updatedAt: 0 },
+    { id: '', patientId: '', courseId: null, date: addDays(today(), 1), time: '10:30', status: 'scheduled', usage: {}, notes: '', createdAt: 0, updatedAt: 0 },
+    { id: '', patientId: '', treatmentId: '', treatment: 'PRP', totalSessions: 6, intervalDays: 30, startDate: '', status: 'active', plan: [], notes: '', createdAt: 0, updatedAt: 0 },
+    3,
+  )
+  return (
+    <section className="card form">
+      <h3>WhatsApp reminders</h3>
+      <Field label="Clinic name (used in the message)">
+        <input defaultValue={r.clinic} placeholder="e.g. Dr. Naik's Hair Clinic" onChange={(e) => save({ clinic: e.target.value.trim() })} />
+      </Field>
+      <Field label="Country code for 10-digit numbers">
+        <input inputMode="numeric" defaultValue={r.countryCode} onChange={(e) => save({ countryCode: e.target.value.replace(/\D/g, '') || '91' })} />
+      </Field>
+      <Field
+        label="Message"
+        hint="Words in braces are filled in: {first} first name, {name} full name, {treatment}, {session} (e.g. session 3 of 6), {when} date and time, {clinic}."
+      >
+        <textarea rows={5} defaultValue={r.template} onChange={(e) => save({ template: e.target.value.trim() || DEFAULT_TEMPLATE })} />
+      </Field>
+      <div className="preview">
+        <span className="field-label">Example</span>
+        <p>{sample}</p>
+      </div>
+      <button className="text-btn small-link" onClick={() => save({ template: DEFAULT_TEMPLATE })}>
+        Reset message to the default
+      </button>
+    </section>
   )
 }
 

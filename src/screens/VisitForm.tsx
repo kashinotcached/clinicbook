@@ -1,7 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_PHOTO_AREAS, db, getSetting, newId, type Course, type Patient, type Photo, type StockItem, type Visit } from '../db'
-import { addDays, courseState, deleteVisit, fmtDate, initials, saveVisit, today, usageOn } from '../logic'
+import { addDays, courseState, deleteVisit, fmtDate, saveVisit, today, usageOn } from '../logic'
+import { calendarUrl } from '../reminders'
 import { addPhoto, removePhoto } from '../photos'
 import { Field, Header, UsageEditor } from '../ui'
 import { PhotoViewer, Thumb } from './PhotoView'
@@ -18,7 +19,7 @@ export function VisitForm(props: Props) {
   const data = useLiveQuery(async () => {
     const visit = props.id ? await db.visits.get(props.id) : null
     const pid = visit?.patientId ?? props.patientId!
-    const [patient, courses, visits, items, photos, areas, calName] = await Promise.all([
+    const [patient, courses, visits, items, photos, areas, calName, calLink] = await Promise.all([
       db.patients.get(pid),
       db.courses.where('patientId').equals(pid).toArray(),
       db.visits.where('patientId').equals(pid).toArray(),
@@ -26,8 +27,9 @@ export function VisitForm(props: Props) {
       visit ? db.photos.where('visitId').equals(visit.id).toArray() : Promise.resolve([] as Photo[]),
       getSetting<string[]>('photoAreas', DEFAULT_PHOTO_AREAS),
       getSetting<'initials' | 'full' | 'none'>('calendarName', 'initials'),
+      getSetting<boolean>('calendarLink', true),
     ])
-    return { visit, patient, courses, visits, items, photos, areas, calName }
+    return { visit, patient, courses, visits, items, photos, areas, calName, calLink }
   }, [props.id, props.patientId])
   if (!data || !data.patient || (props.id && !data.visit)) return null
   return <Inner {...props} {...data} patient={data.patient} />
@@ -42,6 +44,7 @@ function Inner({
   photos,
   areas,
   calName,
+  calLink,
   courseId,
   book,
   date,
@@ -54,6 +57,7 @@ function Inner({
   photos: Photo[]
   areas: string[]
   calName: 'initials' | 'full' | 'none'
+  calLink: boolean
 }) {
   const isNew = !visit
   const activeCourses = courses.filter((c) => c.status === 'active' || c.id === visit?.courseId)
@@ -86,6 +90,8 @@ function Inner({
   const alreadyBooked = state ? state.scheduled.length > 0 : false
   const [bookNext, setBookNext] = useState(false)
   const [nextDate, setNextDate] = useState('')
+  const [nextToCalendar, setNextToCalendar] = useState(true)
+  const [nextId] = useState(newId)
   useEffect(() => {
     if (course) setNextDate(addDays(v.date, course.intervalDays))
   }, [v.date, course])
@@ -120,7 +126,7 @@ function Inner({
       for (const p of pending) await addPhoto(patient.id, v.id, p.area, p.file)
       if (bookNext && course && nextDate && v.status === 'done') {
         await saveVisit({
-          id: newId(),
+          id: nextId,
           patientId: patient.id,
           courseId: course.id,
           date: nextDate,
@@ -150,22 +156,21 @@ function Inner({
     location.replace(`#/patient/${patient.id}`)
   }
 
-  const calUrl = useMemo(() => {
-    if (v.status !== 'scheduled' || !v.date) return ''
-    const who = calName === 'full' ? patient.name : calName === 'initials' ? initials(patient.name) : ''
-    const title = [course ? `${course.treatment} session` : 'Appointment', who].filter(Boolean).join(' – ')
-    const d = v.date.replaceAll('-', '')
-    let dates: string
-    if (v.time) {
-      const [h, m] = v.time.split(':').map(Number)
-      const end = new Date(2000, 0, 1, h, m + 30)
-      const t2 = `${String(end.getHours()).padStart(2, '0')}${String(end.getMinutes()).padStart(2, '0')}00`
-      dates = `${d}T${v.time.replace(':', '')}00/${d}T${t2}`
-    } else {
-      dates = `${d}/${addDays(v.date, 1).replaceAll('-', '')}`
-    }
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${dates}`
-  }, [v.status, v.date, v.time, calName, patient.name, course])
+  const calUrl = useMemo(
+    () =>
+      v.status === 'scheduled' && v.date ? calendarUrl({ visit: v, patient, course, calName, withLink: calLink }) : '',
+    [v, calName, calLink, patient, course],
+  )
+  const nextCalUrl =
+    bookNext && nextToCalendar && course && nextDate && v.status === 'done'
+      ? calendarUrl({ visit: { id: nextId, date: nextDate, time: '' }, patient, course, calName, withLink: calLink })
+      : ''
+
+  /** Opening Google Calendar has to happen in the tap itself, or the phone blocks it; the save runs alongside. */
+  function saveAndOpen(url: string) {
+    void save()
+    if (url) window.open(url, '_blank', 'noopener')
+  }
 
   const savedPhotos = photos
   return (
@@ -260,7 +265,15 @@ function Inner({
                 <input type="checkbox" checked={bookNext} onChange={(e) => setBookNext(e.target.checked)} />
                 Book the next session ({willRemain} left)
               </label>
-              {bookNext && <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />}
+              {bookNext && (
+                <>
+                  <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+                  <label className="check">
+                    <input type="checkbox" checked={nextToCalendar} onChange={(e) => setNextToCalendar(e.target.checked)} />
+                    Also add it to Google Calendar
+                  </label>
+                </>
+              )}
             </div>
           )}
 
@@ -268,16 +281,18 @@ function Inner({
             <button
               className="secondary"
               disabled={busy}
-              onClick={() => {
-                window.open(calUrl, '_blank', 'noopener')
-                save()
-              }}
+              onClick={() => saveAndOpen(calUrl)}
             >
               Save and add to Google Calendar
             </button>
           )}
 
-          <button className="primary" disabled={busy} onClick={save}>
+          {!isNew && visit?.status === 'scheduled' && (
+            <a className="wa-btn" href={`#/remind/${v.id}`}>
+              WhatsApp reminder
+            </a>
+          )}
+          <button className="primary" disabled={busy} onClick={() => saveAndOpen(nextCalUrl)}>
             {busy ? 'Saving…' : 'Save'}
           </button>
           {!isNew && (

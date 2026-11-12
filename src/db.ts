@@ -47,6 +47,8 @@ export interface Visit {
   /** Filled when the visit is done; scheduled visits take the course's current dose. */
   usage: Usage
   notes: string
+  /** When a WhatsApp reminder was last opened for this appointment. */
+  remindedAt?: number
   createdAt: number
   updatedAt: number
 }

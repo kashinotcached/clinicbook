@@ -12,6 +12,11 @@ A phone app for a hair clinic (PRP / GFC): patients, six-session courses, visits
   - **Log session** fills in the current dose; adjust it if that day was different. Logging a session takes the items off stock.
   - **Book next** creates the next appointment; "Save and add to Google Calendar" opens a pre-filled Google Calendar entry
     (initials only by default, set in Settings).
+  - **WhatsApp reminders**: each calendar entry carries a link back into ClinicBook (only a random code, nothing about the
+    patient). When the calendar reminds him, he taps the link and ClinicBook opens with a written reminder for that patient.
+    One tap opens WhatsApp with it, ready to send. The 💬 buttons on Today and the patient page do the same without the calendar.
+    Wording, clinic name and country code are set in Settings → WhatsApp reminders. On iPhone the link opens Safari, which
+    does not share data with the home-screen app, so use the 💬 buttons there.
   - Photos per head area on each visit; the Photos tab lines each area up across visits to compare progress.
     Photos are shrunk to ~1600 px (~250 KB) before saving.
 - **Stock**: stock on hand per item, plus what booked and expected sessions of active courses will need in the next 14 / 30 / 60 days

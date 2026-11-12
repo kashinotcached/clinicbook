@@ -6,6 +6,7 @@ import { PatientDetail } from './screens/PatientDetail'
 import { PatientForm, Patients } from './screens/Patients'
 import { ItemSettings, Settings, TreatmentSettings } from './screens/Settings'
 import { Stock, StockItemPage } from './screens/Stock'
+import { Remind } from './screens/Remind'
 import { Today } from './screens/Today'
 import { VisitForm } from './screens/VisitForm'
 import { Toast, useRoute } from './ui'
@@ -65,6 +66,7 @@ export default function App() {
       />
     )
   else if (a === 'visit') screen = <VisitForm key={b} id={b} />
+  else if (a === 'remind') screen = <Remind key={b} id={b} />
   else if (a === 'stock' && b) screen = <StockItemPage id={b} />
   else if (a === 'stock') screen = <Stock />
   else if (a === 'settings' && b === 'treatments') screen = <TreatmentSettings />
@@ -72,7 +74,7 @@ export default function App() {
   else if (a === 'settings') screen = <Settings notify={setToast} />
   else screen = <Today />
 
-  const tab = a === 'patient' || a === 'course' || a === 'visit' ? 'patients' : a || 'today'
+  const tab = a === 'patient' || a === 'course' || a === 'visit' ? 'patients' : a === 'remind' ? 'today' : a || 'today'
   return (
     <div className="app">
       {screen}

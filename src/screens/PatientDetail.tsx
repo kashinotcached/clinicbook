@@ -151,6 +151,11 @@ export function PatientDetail({ id }: { id: string }) {
                       </span>
                     </a>
                     {v.status === 'done' && <p className="sub">Used: {usageText(v.usage, items)}</p>}
+                    {v.status === 'scheduled' && (
+                      <a className="text-btn small-link" href={`#/remind/${v.id}`}>
+                        {v.remindedAt ? '✓ Reminder sent · send again' : '💬 Send WhatsApp reminder'}
+                      </a>
+                    )}
                     {v.notes && <p className="notes">{v.notes}</p>}
                     {ph.length > 0 && (
                       <div className="thumbs">
