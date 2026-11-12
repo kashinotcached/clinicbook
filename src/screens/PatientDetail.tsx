@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db, type Photo } from '../db'
+import { closedReason, fmtTime, loadClinic } from '../slots'
 import { courseState, currentUsage, fmtDate, relDay, today, usageText } from '../logic'
 import { removePhoto } from '../photos'
 import { Empty, Header, go } from '../ui'
@@ -17,10 +18,10 @@ export function PatientDetail({ id }: { id: string }) {
       db.photos.where('patientId').equals(id).toArray(),
       db.stockItems.orderBy('sort').toArray(),
     ])
-    return { patient, courses, visits, photos, items }
+    return { patient, courses, visits, photos, items, clinic: await loadClinic() }
   }, [id])
   if (!data) return null
-  const { patient, courses, visits, photos, items } = data
+  const { patient, courses, visits, photos, items, clinic } = data
   if (!patient) return <Empty>Patient not found.</Empty>
 
   const states = courses
@@ -48,6 +49,7 @@ export function PatientDetail({ id }: { id: string }) {
         action={<button className="text-btn" onClick={() => go(`/patient/${id}/edit`)}>Edit</button>}
       />
       <main>
+        {(patient.phone || patient.age || patient.gender || patient.notes) && (
         <div className="card info">
           {patient.phone && (
             <a href={`tel:${patient.phone}`} className="phone">
@@ -61,6 +63,7 @@ export function PatientDetail({ id }: { id: string }) {
           </span>
           {patient.notes && <p className="notes">{patient.notes}</p>}
         </div>
+        )}
 
         <section>
           <div className="section-head">
@@ -93,6 +96,10 @@ export function PatientDetail({ id }: { id: string }) {
                 {s.nextDate && (
                   <p className={'next ' + (s.nextDate < today() ? 'late' : '')}>
                     Next: {fmtDate(s.nextDate)} ({relDay(s.nextDate)}) · {s.booked ? 'booked' : 'not booked yet'}
+                    {s.bookedVisit?.time ? ` at ${fmtTime(s.bookedVisit.time)}` : ''}
+                    {closedReason(s.nextDate, clinic.hours, clinic.closures) && (
+                      <span className="closed-note"> — {closedReason(s.nextDate, clinic.hours, clinic.closures)}</span>
+                    )}
                   </p>
                 )}
                 {c.status === 'active' && (

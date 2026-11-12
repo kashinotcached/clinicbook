@@ -63,10 +63,11 @@ function Inner({
     })
   }
 
-  async function save(logNow: boolean) {
+  async function save(logNow: boolean | 'book') {
     const plan = isNew ? [{ ...c.plan[0], date: c.startDate }] : c.plan
     await db.courses.put({ ...c, plan, updatedAt: Date.now() })
-    if (logNow) location.replace(`#/visit/new?patient=${patient.id}&course=${c.id}`)
+    if (logNow === 'book') location.replace(`#/visit/new?patient=${patient.id}&course=${c.id}&book=1&date=${c.startDate}`)
+    else if (logNow) location.replace(`#/visit/new?patient=${patient.id}&course=${c.id}`)
     else if (isNew) location.replace(`#/patient/${patient.id}`)
     else back(`/patient/${patient.id}`)
   }
@@ -132,6 +133,9 @@ function Inner({
             <>
               <button className="primary" onClick={() => save(true)}>
                 Save and log {first ? 'today’s' : 'a'} session
+              </button>
+              <button className="secondary" onClick={() => save('book')}>
+                Save and book the first session
               </button>
               <button className="secondary" onClick={() => save(false)}>
                 Save only

@@ -5,7 +5,7 @@ import { hashPin } from '../crypto'
 import { DEFAULT_PHOTO_AREAS, db, newId, setSetting, type StockItem, type Treatment } from '../db'
 import { addDays, today } from '../logic'
 import { DEFAULT_REMINDER, DEFAULT_TEMPLATE, reminderMessage, type ReminderSettings } from '../reminders'
-import { Field, Header, MoneyInput, Stepper, UsageEditor, go } from '../ui'
+import { Field, Header, Stepper, UsageEditor, go } from '../ui'
 import { SyncCard } from './SyncCard'
 
 const mb = (n: number) => (n / 1048576).toFixed(n > 10485760 ? 0 : 1) + ' MB'
@@ -47,7 +47,11 @@ export function Settings({ notify }: { notify: (s: string) => void }) {
         <PinCard hasPin={s.hasPin} notify={notify} />
 
         <section className="card">
-          <h3>Treatments and stock items</h3>
+          <h3>Clinic</h3>
+          <a className="row" href="#/settings/hours">
+            <span>Clinic hours, appointment length and closed days</span>
+            <span className="chev">›</span>
+          </a>
           <a className="row" href="#/settings/treatments">
             <span>Treatments and what a session uses</span>
             <span className="chev">›</span>
@@ -363,9 +367,6 @@ function TreatmentCard({ t, items }: { t: Treatment; items: StockItem[] }) {
           <Stepper min={1} value={t.intervalDays} onChange={(n) => save({ intervalDays: n })} />
         </Field>
       </div>
-      <Field label="Usual fee per session">
-        <MoneyInput value={t.fee} onChange={(n) => save({ fee: n })} />
-      </Field>
       <Field label="One session uses">
         <UsageEditor items={items} value={t.usage} onChange={(u) => save({ usage: u })} />
       </Field>

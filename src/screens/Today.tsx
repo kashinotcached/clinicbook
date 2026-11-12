@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { db, type Visit } from '../db'
 import { backupAgeDays } from '../backup'
 import { addDays, courseState, fmtDate, forecast, relDay, today, type CourseState } from '../logic'
+import { closedReason, fmtTime, loadClinic, nextFreeSlot } from '../slots'
 import { Empty, Header, go } from '../ui'
 import { SyncBar } from './SyncBar'
 
@@ -19,7 +20,10 @@ export function Today() {
     const loose = visits.filter((v) => v.status === 'scheduled' && !v.courseId)
     const short = (await forecast(30)).filter((f) => f.short > 0 || f.inStock <= f.item.lowAt)
     const scheduled = visits.filter((v) => v.status === 'scheduled')
-    return { names, states, loose, short, scheduled, patientCount: patients.length }
+    const { hours, closures } = await loadClinic()
+    const closedToday = closedReason(today(), hours, closures)
+    const free = await nextFreeSlot()
+    return { names, states, loose, short, scheduled, patientCount: patients.length, closedToday, free }
   })
   const [backupAge, setBackupAge] = useState<number | null | undefined>(undefined)
   useEffect(() => {
@@ -68,6 +72,19 @@ export function Today() {
       <Header title="Today" action={<span className="date-chip">{fmtDate(t)}</span>} />
       <main>
         <SyncBar />
+        {data.closedToday && (
+          <p className="alert warn">
+            <strong>{data.closedToday} today</strong>
+          </p>
+        )}
+        <a className="free-slot" href="#/patients/new">
+          <span>Next free appointment</span>
+          <strong>
+            {data.free
+              ? `${data.free.date === t ? 'Today' : data.free.date === addDays(t, 1) ? 'Tomorrow' : fmtDate(data.free.date)}, ${fmtTime(data.free.time)}`
+              : 'None in the next 60 days'}
+          </strong>
+        </a>
         {backupAge !== undefined && data.patientCount > 0 && (backupAge === null || backupAge >= 7) && (
           <a className="alert warn" href="#/settings">
             <strong>{backupAge === null ? 'No backup yet' : `Last backup ${backupAge} days ago`}</strong>

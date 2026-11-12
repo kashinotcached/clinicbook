@@ -102,29 +102,6 @@ export function UsageEditor({ items, value, onChange }: { items: StockItem[]; va
   )
 }
 
-/** Amount in rupees; empty means "not given". */
-export function MoneyInput({ value, onChange, placeholder }: { value: number | undefined; onChange: (n: number | undefined) => void; placeholder?: string }) {
-  // keep what is typed ("12." while typing 12.50) and only report the number
-  const [text, setText] = useState(value === undefined ? '' : String(value))
-  if (value !== undefined && Number(text) !== value) setText(String(value))
-  if (value === undefined && text !== '' && !Number.isNaN(Number(text))) setText('')
-  return (
-    <div className="money">
-      <span>₹</span>
-      <input
-        inputMode="decimal"
-        placeholder={placeholder ?? '0'}
-        value={text}
-        onChange={(e) => {
-          const t = e.target.value.replace(/[^\d.]/g, '')
-          setText(t)
-          onChange(t === '' || Number.isNaN(Number(t)) ? undefined : Number(t))
-        }}
-      />
-    </div>
-  )
-}
-
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="empty">{children}</p>
 }

@@ -47,8 +47,6 @@ export interface Visit {
   /** Filled when the visit is done; scheduled visits take the course's current dose. */
   usage: Usage
   notes: string
-  /** Amount charged for this visit (₹). */
-  fee?: number
   /** When a WhatsApp reminder was last opened for this appointment. */
   remindedAt?: number
   createdAt: number
@@ -100,8 +98,6 @@ export interface StockMove {
   visitId: string | null
   date: string
   note: string
-  /** Total amount paid for a 'received' entry (₹). */
-  cost?: number
   supplierId?: string | null
   createdAt: number
 }
@@ -112,8 +108,6 @@ export interface Treatment {
   sessions: number
   intervalDays: number
   usage: Usage
-  /** Usual fee per session (₹). */
-  fee?: number
   sort: number
 }
 

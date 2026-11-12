@@ -3,8 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_PHOTO_AREAS, db, getSetting, newId, type Course, type Patient, type Photo, type StockItem, type Visit } from '../db'
 import { addDays, courseState, deleteVisit, fmtDate, saveVisit, today, usageOn } from '../logic'
 import { calendarUrl } from '../reminders'
+import { closedReason, fmtTime, loadClinic, withinHours, type ClinicHours, type Closure } from '../slots'
+import { SlotPicker } from './SlotPicker'
 import { addPhoto, removePhoto } from '../photos'
-import { Field, Header, MoneyInput, UsageEditor } from '../ui'
+import { Field, Header, UsageEditor } from '../ui'
 import { Camera, type Shot } from './Camera'
 import { PhotoViewer, Thumb } from './PhotoView'
 
@@ -20,7 +22,7 @@ export function VisitForm(props: Props) {
   const data = useLiveQuery(async () => {
     const visit = props.id ? await db.visits.get(props.id) : null
     const pid = visit?.patientId ?? props.patientId!
-    const [patient, courses, visits, items, photos, areas, calName, calLink, treatments] = await Promise.all([
+    const [patient, courses, visits, items, photos, areas, calName, calLink] = await Promise.all([
       db.patients.get(pid),
       db.courses.where('patientId').equals(pid).toArray(),
       db.visits.where('patientId').equals(pid).toArray(),
@@ -29,10 +31,8 @@ export function VisitForm(props: Props) {
       getSetting<string[]>('photoAreas', DEFAULT_PHOTO_AREAS),
       getSetting<'initials' | 'full' | 'none'>('calendarName', 'initials'),
       getSetting<boolean>('calendarLink', true),
-      db.treatments.toArray(),
     ])
-    const fees = Object.fromEntries(treatments.map((t) => [t.id, t.fee]))
-    return { visit, patient, courses, visits, items, photos, areas, calName, calLink, fees }
+    return { visit, patient, courses, visits, items, photos, areas, calName, calLink, clinic: await loadClinic() }
   }, [props.id, props.patientId])
   if (!data || !data.patient || (props.id && !data.visit)) return null
   return <Inner {...props} {...data} patient={data.patient} />
@@ -48,7 +48,7 @@ function Inner({
   areas,
   calName,
   calLink,
-  fees,
+  clinic,
   courseId,
   book,
   date,
@@ -62,7 +62,7 @@ function Inner({
   areas: string[]
   calName: 'initials' | 'full' | 'none'
   calLink: boolean
-  fees: Record<string, number | undefined>
+  clinic: { hours: ClinicHours; closures: Closure[] }
 }) {
   const isNew = !visit
   const activeCourses = courses.filter((c) => c.status === 'active' || c.id === visit?.courseId)
@@ -79,13 +79,14 @@ function Inner({
       time: '',
       status: book ? 'scheduled' : 'done',
       usage: course && !book ? { ...usageOn(course, d) } : {},
-      fee: course ? fees[course.treatmentId] : undefined,
       notes: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
   })
   const course = courses.find((c) => c.id === v.courseId)
+  // the date the booking aims for (due date of the session, or today), kept while times are picked
+  const [target] = useState(v.date)
   const [pending, setPending] = useState<Shot[]>([])
   const [cameraAt, setCameraAt] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -97,10 +98,16 @@ function Inner({
   const alreadyBooked = state ? state.scheduled.length > 0 : false
   const [bookNext, setBookNext] = useState(false)
   const [nextDate, setNextDate] = useState('')
+  const [nextTime, setNextTime] = useState('')
+  const [nextDue, setNextDue] = useState('')
   const [nextToCalendar, setNextToCalendar] = useState(true)
   const [nextId] = useState(newId)
   useEffect(() => {
-    if (course) setNextDate(addDays(v.date, course.intervalDays))
+    if (!course) return
+    const due = addDays(v.date, course.intervalDays)
+    setNextDue(due)
+    setNextDate(due)
+    setNextTime('')
   }, [v.date, course])
 
   const pendingRef = useRef(pending)
@@ -117,11 +124,7 @@ function Inner({
 
   function setCourse(cid: string) {
     const c = courses.find((x) => x.id === cid)
-    set({
-      courseId: cid || null,
-      usage: c && v.status === 'done' ? { ...usageOn(c, v.date) } : v.usage,
-      fee: c ? (fees[c.treatmentId] ?? v.fee) : v.fee,
-    })
+    set({ courseId: cid || null, usage: c && v.status === 'done' ? { ...usageOn(c, v.date) } : v.usage })
   }
 
   function addFiles(area: string, files: FileList | null) {
@@ -141,7 +144,7 @@ function Inner({
           patientId: patient.id,
           courseId: course.id,
           date: nextDate,
-          time: '',
+          time: nextTime,
           status: 'scheduled',
           usage: {},
           notes: '',
@@ -174,7 +177,7 @@ function Inner({
   )
   const nextCalUrl =
     bookNext && nextToCalendar && course && nextDate && v.status === 'done'
-      ? calendarUrl({ visit: { id: nextId, date: nextDate, time: '' }, patient, course, calName, withLink: calLink })
+      ? calendarUrl({ visit: { id: nextId, date: nextDate, time: nextTime }, patient, course, calName, withLink: calLink })
       : ''
 
   /** Opening Google Calendar has to happen in the tap itself, or the phone blocks it; the save runs alongside. */
@@ -182,6 +185,10 @@ function Inner({
     void save()
     if (url) window.open(url, '_blank', 'noopener')
   }
+
+  const dateWarning =
+    closedReason(v.date, clinic.hours, clinic.closures) ??
+    (v.time && !withinHours(v.date, v.time, clinic.hours) ? 'This time is outside clinic hours.' : null)
 
   const savedPhotos = photos
   return (
@@ -204,14 +211,18 @@ function Inner({
               Missed
             </button>
           </div>
+          {v.status === 'scheduled' && (
+            <SlotPicker target={target} date={v.date} time={v.time} excludeVisitId={v.id} onPick={(date, time) => set({ date, time })} />
+          )}
           <div className="two">
             <Field label="Date">
               <input type="date" value={v.date} onChange={(e) => set({ date: e.target.value })} />
             </Field>
-            <Field label="Time (optional)">
+            <Field label={v.status === 'scheduled' ? 'Time' : 'Time (optional)'}>
               <input type="time" value={v.time} onChange={(e) => set({ time: e.target.value })} />
             </Field>
           </div>
+          {v.status === 'scheduled' && dateWarning && <p className="alert warn"><span>{dateWarning}</span></p>}
           <Field label="Course">
             <select value={v.courseId ?? ''} onChange={(e) => setCourse(e.target.value)}>
               {activeCourses.map((c) => (
@@ -226,11 +237,6 @@ function Inner({
           {v.status === 'done' && (
             <Field label="Used in this session" hint="Comes off stock automatically.">
               <UsageEditor items={items} value={v.usage} onChange={(u) => set({ usage: u })} />
-            </Field>
-          )}
-          {v.status === 'done' && (
-            <Field label="Fee charged" hint="For the profit report. The usual fee comes from Settings → Treatments.">
-              <MoneyInput value={v.fee} onChange={(n) => set({ fee: n })} />
             </Field>
           )}
 
@@ -293,7 +299,18 @@ function Inner({
               </label>
               {bookNext && (
                 <>
-                  <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+                  <SlotPicker
+                    target={nextDue}
+                    date={nextDate}
+                    time={nextTime}
+                    onPick={(d, t) => {
+                      setNextDate(d)
+                      setNextTime(t)
+                    }}
+                  />
+                  <p className="sub">
+                    {nextTime ? `Booking ${fmtDate(nextDate)} at ${fmtTime(nextTime)}` : `Pick a time above, or it is booked for ${fmtDate(nextDate)} without a time.`}
+                  </p>
                   <label className="check">
                     <input type="checkbox" checked={nextToCalendar} onChange={(e) => setNextToCalendar(e.target.checked)} />
                     Also add it to Google Calendar

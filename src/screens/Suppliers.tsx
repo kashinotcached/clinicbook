@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db, newId, type Supplier } from '../db'
-import { fmtDate, rupees } from '../logic'
+import { fmtDate } from '../logic'
 import { waNumber } from '../reminders'
 import { Empty, Field, Header, go } from '../ui'
 
@@ -13,7 +13,7 @@ export function Suppliers() {
       const mine = received.filter((m) => m.supplierId === s.id)
       return {
         s,
-        spend: mine.reduce((t, m) => t + (m.cost ?? 0), 0),
+        deliveries: mine.length,
         last: mine.reduce((d, m) => (m.date > d ? m.date : d), ''),
       }
     })
@@ -27,7 +27,7 @@ export function Suppliers() {
           <Empty>No suppliers yet. Add one here, or choose “+ New supplier” when recording stock received.</Empty>
         ) : (
           <ul className="list">
-            {rows.map(({ s, spend, last }) => (
+            {rows.map(({ s, deliveries, last }) => (
               <li key={s.id}>
                 <a className="row" href={`#/supplier/${s.id}`}>
                   <div>
@@ -37,7 +37,7 @@ export function Suppliers() {
                       {last ? ` · last order ${fmtDate(last)}` : ''}
                     </span>
                   </div>
-                  <span className="amount">{rupees(spend)}</span>
+                  <span className="sub">{deliveries} deliveries</span>
                 </a>
               </li>
             ))}
@@ -69,14 +69,13 @@ function Inner({
   isNew,
 }: {
   supplier: Supplier | null
-  moves: { id: string; itemId: string; qty: number; date: string; cost?: number; note: string }[]
+  moves: { id: string; itemId: string; qty: number; date: string; note: string }[]
   items: Map<string, string>
   isNew: boolean
 }) {
   const [s, setS] = useState<Supplier>(supplier ?? { id: newId(), name: '', phone: '', notes: '', createdAt: Date.now() })
   const set = (patch: Partial<Supplier>) => setS({ ...s, ...patch })
   const sorted = [...moves].sort((a, b) => b.date.localeCompare(a.date))
-  const spend = moves.reduce((t, m) => t + (m.cost ?? 0), 0)
 
   async function save() {
     if (!s.name.trim()) return
@@ -131,7 +130,7 @@ function Inner({
           </div>
           {!isNew && (
             <section>
-              <h2>Purchases · {rupees(spend)} in total</h2>
+              <h2>Deliveries ({moves.length})</h2>
               {sorted.length === 0 && <Empty>Nothing received from this supplier yet.</Empty>}
               <ul className="list moves">
                 {sorted.map((m) => (
@@ -145,7 +144,6 @@ function Inner({
                         {m.note ? ` · ${m.note}` : ''}
                       </span>
                     </div>
-                    <span className="amount">{m.cost ? rupees(m.cost) : '—'}</span>
                   </li>
                 ))}
               </ul>

@@ -1,17 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db, isPerSession, newId, type StockItem, type StockMove, type Supplier } from '../db'
-import { averageCosts, fmtDate, forecast, rupees, stockLevels, today, type ForecastLine } from '../logic'
-import { Empty, Field, Header, MoneyInput, Stepper, go } from '../ui'
+import { fmtDate, forecast, stockLevels, today, type ForecastLine } from '../logic'
+import { Empty, Field, Header, Stepper, go } from '../ui'
 
 export function Stock() {
   const [days, setDays] = useState(30)
-  const data = useLiveQuery(async () => ({ lines: await forecast(days), avg: await averageCosts() }), [days])
-  if (!data) return null
-  const { lines, avg } = data
+  const lines = useLiveQuery(() => forecast(days), [days])
+  if (!lines) return null
   const session = lines.filter((l) => isPerSession(l.item))
   const other = lines.filter((l) => !isPerSession(l.item))
-  const value = lines.reduce((s, l) => s + Math.max(0, l.inStock) * (avg[l.item.id] ?? 0), 0)
 
   const row = ({ item, inStock, need, short }: ForecastLine) => {
     const low = inStock <= item.lowAt
@@ -23,7 +21,6 @@ export function Stock() {
             <span className="sub">
               {isPerSession(item) ? `Needed: ${need} ${item.unit}` : low ? 'Running low' : item.unit}
               {short > 0 && <b className="short"> · order {short}+</b>}
-              {avg[item.id] !== undefined && ` · ${rupees(avg[item.id])}/${item.unit}`}
             </span>
           </div>
           <span className={'count ' + (short > 0 ? 'bad' : low ? 'warn' : 'ok')}>
@@ -56,7 +53,6 @@ export function Stock() {
         </div>
         <p className="hint">
           “Needed” counts booked and expected sessions of active courses at each patient’s current dose.
-          {value > 0 && ` Stock on hand is worth about ${rupees(value)}.`}
         </p>
         <section>
           <h2>Used in sessions</h2>
@@ -112,7 +108,7 @@ export function NewStockItem() {
           <p className="hint">
             {perSession
               ? 'Set how many each session uses in Settings → Treatments; it then comes off stock with every logged session.'
-              : 'Record it with “Used up / opened” when a vial or pack is finished. It still counts in the profit report.'}
+              : 'Record it with “Used up / opened” when a vial or pack is finished.'}
           </p>
           <Field label="Warn when stock is at or below">
             <Stepper value={lowAt} onChange={setLowAt} />
@@ -130,23 +126,22 @@ type Mode = 'receive' | 'use' | 'count'
 
 export function StockItemPage({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
-    const [item, moves, levels, visits, patients, suppliers, avg] = await Promise.all([
+    const [item, moves, levels, visits, patients, suppliers] = await Promise.all([
       db.stockItems.get(id),
       db.stockMoves.where('itemId').equals(id).toArray(),
       stockLevels(),
       db.visits.toArray(),
       db.patients.toArray(),
       db.suppliers.orderBy('name').toArray(),
-      averageCosts(),
     ])
     const visitPatient = new Map(visits.map((v) => [v.id, v.patientId]))
     const names = new Map(patients.map((p) => [p.id, p.name]))
-    return { item, moves, level: levels[id] ?? 0, visitPatient, names, suppliers, avg: avg[id] }
+    return { item, moves, level: levels[id] ?? 0, visitPatient, names, suppliers }
   }, [id])
   const [mode, setMode] = useState<Mode | null>(null)
   const [limit, setLimit] = useState(30)
   if (!data) return null
-  const { item, moves, level, visitPatient, names, suppliers, avg } = data
+  const { item, moves, level, visitPatient, names, suppliers } = data
   if (!item) return <Empty>Item not found.</Empty>
   const sorted = moves.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
   const supplierName = new Map(suppliers.map((s) => [s.id, s.name]))
@@ -162,7 +157,6 @@ export function StockItemPage({ id }: { id: string }) {
               <span className="num">{level}</span>
               <span className="sub">
                 {item.unit} in stock · warn at {item.lowAt}
-                {avg !== undefined && ` · average ${rupees(avg)} per ${item.unit}`}
               </span>
             </div>
             {!mode && (
@@ -245,7 +239,6 @@ function MoveRow({
         <strong>{title}</strong>
         <span className="sub">
           {fmtDate(m.date)}
-          {m.kind === 'received' && m.cost ? ` · paid ${rupees(m.cost)}` : ''}
           {m.note ? ` · ${m.note}` : ''}
         </span>
       </div>
@@ -281,7 +274,6 @@ function MoveForm({
   const [qty, setQty] = useState(mode === 'count' ? Math.max(0, level) : mode === 'use' ? 1 : 0)
   const [date, setDate] = useState(today())
   const [note, setNote] = useState('')
-  const [cost, setCost] = useState<number | undefined>(undefined)
   const [supplierId, setSupplierId] = useState(defaultSupplier)
   const [newSupplier, setNewSupplier] = useState('')
 
@@ -305,7 +297,6 @@ function MoveForm({
       visitId: null,
       date,
       note: note.trim(),
-      cost: mode === 'receive' ? cost : undefined,
       supplierId: sid,
       createdAt: Date.now(),
     })
@@ -344,11 +335,6 @@ function MoveForm({
             </button>
           ))}
         </div>
-      )}
-      {mode === 'receive' && (
-        <Field label="Total amount paid" hint={cost && qty ? `${rupees(cost / qty)} per ${item.unit}` : 'Used to work out profit. Leave empty if unknown.'}>
-          <MoneyInput value={cost} onChange={setCost} />
-        </Field>
       )}
       <Field label="Date">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
