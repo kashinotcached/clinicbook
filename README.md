@@ -5,7 +5,8 @@ A phone app for a hair clinic (PRP / GFC): patients, six-session courses, visits
 
 ## What it does
 
-- **Today**: who is due today, who is overdue, the next 7 days, a stock warning and a backup reminder.
+- **Today**: reminders still to send for today and tomorrow, who is due, who is overdue, the next 7 days, a stock warning
+  and a backup reminder. Where the phone or PC supports it, the app icon shows how many reminders are waiting.
 - **Patients**: each patient has courses (PRP, GFC, …). A course has a number of sessions, the days between them, and the
   **dose**: what one session uses from stock (e.g. 4 PRP bottles, 1 pair of gloves, …).
   - **Change dose** records the change from a date (4 → 2 bottles after improvement). Visits already logged keep what they used.
@@ -17,11 +18,21 @@ A phone app for a hair clinic (PRP / GFC): patients, six-session courses, visits
     One tap opens WhatsApp with it, ready to send. The 💬 buttons on Today and the patient page do the same without the calendar.
     Wording, clinic name and country code are set in Settings → WhatsApp reminders. On iPhone the link opens Safari, which
     does not share data with the home-screen app, so use the 💬 buttons there.
-  - Photos per head area on each visit; the Photos tab lines each area up across visits to compare progress.
-    Photos are shrunk to ~1600 px (~250 KB) before saving.
-- **Stock**: stock on hand per item, plus what booked and expected sessions of active courses will need in the next 14 / 30 / 60 days
-  at each patient's current dose. Record deliveries with "Received stock"; fix a wrong count with "Correct the count".
-- **Settings**: encrypted backup and restore, app PIN, treatments and their default dose, stock items and low-stock levels,
+  - **Photos**: "Take photos" opens the camera inside the app. Pick the area (Front / hairline, Crown…), take as many shots as
+    needed, move to the next area, and upload from the gallery in the same screen. The last photo of that area from an
+    earlier visit is shown faintly over the camera, to line up the same angle. Each area also has its own Camera / Upload
+    buttons. The Photos tab lines each area up across visits. Photos are shrunk to ~1600 px (~250 KB) before saving.
+  - **Fee charged** per visit (the treatment's usual fee is filled in) feeds the profit report.
+- **Stock**: two groups, items used in every session (PRP kit, gloves, syringes…) and other stock used now and then
+  (anaesthetic vials, medicines, equipment). Session items show what booked and expected sessions will need in the next
+  14 / 30 / 60 days at each patient's current dose. "Received stock" records supplier (pick from the list or add a new one),
+  quantity and amount paid; "Used up / opened" records an occasional item being finished; "Correct the count" fixes the count.
+- **Suppliers** (from Stock): name, phone, notes, every purchase and the total spent; call or WhatsApp them.
+- **Reports**: per month or year, income, cost of the items used (at the average price paid), profit, money spent on stock,
+  and breakdowns by treatment, item and supplier. Rent, staff and other running costs are not included.
+- **PC**: on a wide screen the menu moves to the side and pages use the width. Data is per device: a PC has its own records
+  unless a backup from the phone is restored on it.
+- **Settings**: encrypted backup and restore, app PIN, treatments with their usual fee and dose, stock items and low-stock levels,
   photo areas, calendar naming.
 
 ## Backups (important)

@@ -5,7 +5,9 @@ import { CourseForm, DoseChange } from './screens/CourseForm'
 import { PatientDetail } from './screens/PatientDetail'
 import { PatientForm, Patients } from './screens/Patients'
 import { ItemSettings, Settings, TreatmentSettings } from './screens/Settings'
-import { Stock, StockItemPage } from './screens/Stock'
+import { Reports } from './screens/Reports'
+import { NewStockItem, Stock, StockItemPage } from './screens/Stock'
+import { SupplierPage, Suppliers } from './screens/Suppliers'
 import { Remind } from './screens/Remind'
 import { Today } from './screens/Today'
 import { VisitForm } from './screens/VisitForm'
@@ -67,6 +69,10 @@ export default function App() {
     )
   else if (a === 'visit') screen = <VisitForm key={b} id={b} />
   else if (a === 'remind') screen = <Remind key={b} id={b} />
+  else if (a === 'stock-new') screen = <NewStockItem />
+  else if (a === 'suppliers') screen = <Suppliers />
+  else if (a === 'supplier') screen = <SupplierPage key={b} id={b} />
+  else if (a === 'reports') screen = <Reports />
   else if (a === 'stock' && b) screen = <StockItemPage id={b} />
   else if (a === 'stock') screen = <Stock />
   else if (a === 'settings' && b === 'treatments') screen = <TreatmentSettings />
@@ -74,15 +80,24 @@ export default function App() {
   else if (a === 'settings') screen = <Settings notify={setToast} />
   else screen = <Today />
 
-  const tab = a === 'patient' || a === 'course' || a === 'visit' ? 'patients' : a === 'remind' ? 'today' : a || 'today'
+  const tab =
+    a === 'patient' || a === 'course' || a === 'visit'
+      ? 'patients'
+      : a === 'suppliers' || a === 'supplier' || a === 'stock-new'
+        ? 'stock'
+        : a === 'remind'
+          ? 'today'
+          : a || 'today'
   return (
     <div className="app">
       {screen}
       <nav className="tabbar">
+        <span className="side-brand">ClinicBook</span>
         {[
           ['today', 'Today', '◷'],
           ['patients', 'Patients', '☺'],
           ['stock', 'Stock', '▦'],
+          ['reports', 'Reports', '₹'],
           ['settings', 'Settings', '⚙'],
         ].map(([id, label, icon]) => (
           <a key={id} href={`#/${id}`} aria-current={tab === id ? 'page' : undefined}>

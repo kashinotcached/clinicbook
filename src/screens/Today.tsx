@@ -17,15 +17,26 @@ export function Today() {
     // appointments that are not part of a course
     const loose = visits.filter((v) => v.status === 'scheduled' && !v.courseId)
     const short = (await forecast(30)).filter((f) => f.short > 0 || f.inStock <= f.item.lowAt)
-    return { names, states, loose, short, patientCount: patients.length }
+    const scheduled = visits.filter((v) => v.status === 'scheduled')
+    return { names, states, loose, short, scheduled, patientCount: patients.length }
   })
   const [backupAge, setBackupAge] = useState<number | null | undefined>(undefined)
   useEffect(() => {
     backupAgeDays().then(setBackupAge)
   }, [])
 
-  if (!data) return null
   const t = today()
+  const toRemind = (data?.scheduled ?? [])
+    .filter((v) => (v.date === t || v.date === addDays(t, 1)) && !v.remindedAt)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+  useEffect(() => {
+    // number on the app icon where the phone or PC supports it
+    const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> }
+    if (toRemind.length) nav.setAppBadge?.(toRemind.length).catch(() => {})
+    else nav.clearAppBadge?.().catch(() => {})
+  }, [toRemind.length])
+
+  if (!data) return null
   const week = addDays(t, 7)
   const overdue = data.states.filter((s) => s.nextDate < t).sort(byDate)
   const due = data.states.filter((s) => s.nextDate === t)
@@ -70,6 +81,29 @@ export function Today() {
                 .join(' · ')}
             </span>
           </a>
+        )}
+
+        {toRemind.length > 0 && (
+          <section>
+            <h2>Reminders to send</h2>
+            <p className="hint">Booked for today or tomorrow, no WhatsApp reminder yet.</p>
+            <ul className="list">
+              {toRemind.map((v) => (
+                <li key={v.id}>
+                  <a href={`#/remind/${v.id}`} className="row">
+                    <div>
+                      <strong>{data.names.get(v.patientId)}</strong>
+                      <span className="sub">
+                        {v.date === t ? 'Today' : 'Tomorrow'}
+                        {v.time ? ` · ${v.time}` : ''}
+                      </span>
+                    </div>
+                    <span className="wa-pill">💬 Send</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <section>

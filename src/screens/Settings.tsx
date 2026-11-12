@@ -5,7 +5,7 @@ import { hashPin } from '../crypto'
 import { DEFAULT_PHOTO_AREAS, db, newId, setSetting, type StockItem, type Treatment } from '../db'
 import { addDays, today } from '../logic'
 import { DEFAULT_REMINDER, DEFAULT_TEMPLATE, reminderMessage, type ReminderSettings } from '../reminders'
-import { Field, Header, Stepper, UsageEditor } from '../ui'
+import { Field, Header, MoneyInput, Stepper, UsageEditor, go } from '../ui'
 
 const mb = (n: number) => (n / 1048576).toFixed(n > 10485760 ? 0 : 1) + ' MB'
 const when = (t: number) => (t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'never')
@@ -361,6 +361,9 @@ function TreatmentCard({ t, items }: { t: Treatment; items: StockItem[] }) {
           <Stepper min={1} value={t.intervalDays} onChange={(n) => save({ intervalDays: n })} />
         </Field>
       </div>
+      <Field label="Usual fee per session">
+        <MoneyInput value={t.fee} onChange={(n) => save({ fee: n })} />
+      </Field>
       <Field label="One session uses">
         <UsageEditor items={items} value={t.usage} onChange={(u) => save({ usage: u })} />
       </Field>
@@ -390,13 +393,17 @@ export function ItemSettings() {
               <Stepper value={i.lowAt} onChange={(n) => save(i.id, { lowAt: n })} />
             </Field>
             <label className="check">
+              <input type="checkbox" checked={i.perSession !== false} onChange={(e) => save(i.id, { perSession: e.target.checked })} /> Used in every
+              session
+            </label>
+            <label className="check">
               <input type="checkbox" checked={i.active} onChange={(e) => save(i.id, { active: e.target.checked })} /> In use
             </label>
           </section>
         ))}
         <button
           className="secondary wide"
-          onClick={() => db.stockItems.add({ id: newId(), name: 'New item', unit: 'pc', lowAt: 10, sort: items.length + 1, active: true })}
+          onClick={() => go('/stock-new')}
         >
           + Add stock item
         </button>

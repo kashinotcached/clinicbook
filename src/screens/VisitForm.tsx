@@ -4,7 +4,8 @@ import { DEFAULT_PHOTO_AREAS, db, getSetting, newId, type Course, type Patient, 
 import { addDays, courseState, deleteVisit, fmtDate, saveVisit, today, usageOn } from '../logic'
 import { calendarUrl } from '../reminders'
 import { addPhoto, removePhoto } from '../photos'
-import { Field, Header, UsageEditor } from '../ui'
+import { Field, Header, MoneyInput, UsageEditor } from '../ui'
+import { Camera, type Shot } from './Camera'
 import { PhotoViewer, Thumb } from './PhotoView'
 
 interface Props {
@@ -19,7 +20,7 @@ export function VisitForm(props: Props) {
   const data = useLiveQuery(async () => {
     const visit = props.id ? await db.visits.get(props.id) : null
     const pid = visit?.patientId ?? props.patientId!
-    const [patient, courses, visits, items, photos, areas, calName, calLink] = await Promise.all([
+    const [patient, courses, visits, items, photos, areas, calName, calLink, treatments] = await Promise.all([
       db.patients.get(pid),
       db.courses.where('patientId').equals(pid).toArray(),
       db.visits.where('patientId').equals(pid).toArray(),
@@ -28,8 +29,10 @@ export function VisitForm(props: Props) {
       getSetting<string[]>('photoAreas', DEFAULT_PHOTO_AREAS),
       getSetting<'initials' | 'full' | 'none'>('calendarName', 'initials'),
       getSetting<boolean>('calendarLink', true),
+      db.treatments.toArray(),
     ])
-    return { visit, patient, courses, visits, items, photos, areas, calName, calLink }
+    const fees = Object.fromEntries(treatments.map((t) => [t.id, t.fee]))
+    return { visit, patient, courses, visits, items, photos, areas, calName, calLink, fees }
   }, [props.id, props.patientId])
   if (!data || !data.patient || (props.id && !data.visit)) return null
   return <Inner {...props} {...data} patient={data.patient} />
@@ -45,6 +48,7 @@ function Inner({
   areas,
   calName,
   calLink,
+  fees,
   courseId,
   book,
   date,
@@ -58,6 +62,7 @@ function Inner({
   areas: string[]
   calName: 'initials' | 'full' | 'none'
   calLink: boolean
+  fees: Record<string, number | undefined>
 }) {
   const isNew = !visit
   const activeCourses = courses.filter((c) => c.status === 'active' || c.id === visit?.courseId)
@@ -74,13 +79,15 @@ function Inner({
       time: '',
       status: book ? 'scheduled' : 'done',
       usage: course && !book ? { ...usageOn(course, d) } : {},
+      fee: course ? fees[course.treatmentId] : undefined,
       notes: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
   })
   const course = courses.find((c) => c.id === v.courseId)
-  const [pending, setPending] = useState<{ key: string; area: string; file: File; url: string }[]>([])
+  const [pending, setPending] = useState<Shot[]>([])
+  const [cameraAt, setCameraAt] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [viewer, setViewer] = useState<number | null>(null)
 
@@ -110,7 +117,11 @@ function Inner({
 
   function setCourse(cid: string) {
     const c = courses.find((x) => x.id === cid)
-    set({ courseId: cid || null, usage: c && v.status === 'done' ? { ...usageOn(c, v.date) } : v.usage })
+    set({
+      courseId: cid || null,
+      usage: c && v.status === 'done' ? { ...usageOn(c, v.date) } : v.usage,
+      fee: c ? (fees[c.treatmentId] ?? v.fee) : v.fee,
+    })
   }
 
   function addFiles(area: string, files: FileList | null) {
@@ -217,16 +228,35 @@ function Inner({
               <UsageEditor items={items} value={v.usage} onChange={(u) => set({ usage: u })} />
             </Field>
           )}
+          {v.status === 'done' && (
+            <Field label="Fee charged" hint="For the profit report. The usual fee comes from Settings → Treatments.">
+              <MoneyInput value={v.fee} onChange={(n) => set({ fee: n })} />
+            </Field>
+          )}
 
           {v.status !== 'scheduled' && (
             <Field label="Photos">
+              <button type="button" className="primary camera-open" onClick={() => setCameraAt(areas[0])}>
+                📷 Take photos
+              </button>
               <div className="photo-areas">
                 {areas.map((area) => {
                   const saved = savedPhotos.filter((p) => p.area === area)
                   const queued = pending.filter((p) => p.area === area)
                   return (
                     <div key={area} className="photo-area">
-                      <span>{area}</span>
+                      <div className="photo-area-head">
+                        <span>{area}</span>
+                        <span className="photo-area-actions">
+                          <button type="button" className="text-btn" onClick={() => setCameraAt(area)}>
+                            Camera
+                          </button>
+                          <label className="text-btn">
+                            <input type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(area, e.target.files)} />
+                            Upload
+                          </label>
+                        </span>
+                      </div>
                       <div className="thumbs">
                         {saved.map((p) => (
                           <Thumb key={p.id} photo={p} onClick={() => setViewer(savedPhotos.indexOf(p))} />
@@ -243,10 +273,6 @@ function Inner({
                             <span className="thumb-label">✕ remove</span>
                           </button>
                         ))}
-                        <label className="thumb add">
-                          <input type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(area, e.target.files)} />
-                          +📷
-                        </label>
                       </div>
                     </div>
                   )
@@ -302,6 +328,19 @@ function Inner({
           )}
         </div>
       </main>
+      {cameraAt && (
+        <Camera
+          areas={areas}
+          startArea={cameraAt}
+          patientId={patient.id}
+          visitId={v.id}
+          onClose={() => setCameraAt(null)}
+          onDone={(shots) => {
+            setPending((cur) => [...cur, ...shots])
+            setCameraAt(null)
+          }}
+        />
+      )}
       {viewer !== null && (
         <PhotoViewer
           list={savedPhotos}

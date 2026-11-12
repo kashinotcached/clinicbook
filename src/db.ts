@@ -47,6 +47,8 @@ export interface Visit {
   /** Filled when the visit is done; scheduled visits take the course's current dose. */
   usage: Usage
   notes: string
+  /** Amount charged for this visit (₹). */
+  fee?: number
   /** When a WhatsApp reminder was last opened for this appointment. */
   remindedAt?: number
   createdAt: number
@@ -75,6 +77,18 @@ export interface StockItem {
   lowAt: number
   sort: number
   active: boolean
+  /** Used in every session (PRP kit, gloves…) or only now and then (anaesthetic vial, equipment…). Missing = true. */
+  perSession?: boolean
+}
+
+export const isPerSession = (i: StockItem) => i.perSession !== false
+
+export interface Supplier {
+  id: string
+  name: string
+  phone: string
+  notes: string
+  createdAt: number
 }
 
 export interface StockMove {
@@ -86,6 +100,9 @@ export interface StockMove {
   visitId: string | null
   date: string
   note: string
+  /** Total amount paid for a 'received' entry (₹). */
+  cost?: number
+  supplierId?: string | null
   createdAt: number
 }
 
@@ -95,6 +112,8 @@ export interface Treatment {
   sessions: number
   intervalDays: number
   usage: Usage
+  /** Usual fee per session (₹). */
+  fee?: number
   sort: number
 }
 
@@ -113,6 +132,7 @@ class ClinicDb extends Dexie {
   stockMoves!: Table<StockMove, string>
   treatments!: Table<Treatment, string>
   settings!: Table<Setting, string>
+  suppliers!: Table<Supplier, string>
 
   constructor() {
     super('clinicbook')
@@ -126,6 +146,10 @@ class ClinicDb extends Dexie {
       stockMoves: 'id, itemId, visitId, date',
       treatments: 'id, sort',
       settings: 'key',
+    })
+    this.version(2).stores({
+      stockMoves: 'id, itemId, visitId, date, supplierId',
+      suppliers: 'id, name',
     })
   }
 }
@@ -142,6 +166,7 @@ export const recordTables = [
   'stockMoves',
   'treatments',
   'settings',
+  'suppliers',
 ] as const
 
 export const newId = () => crypto.randomUUID()
